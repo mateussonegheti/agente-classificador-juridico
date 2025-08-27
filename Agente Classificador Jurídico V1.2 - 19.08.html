@@ -264,7 +264,7 @@
 
                 const resultsHtml = resultsToDisplay.map((item, index) => {
                     let titleColor;
-                    if (item.tipo_documento === 'Sentença' || item.tipo_documento === 'Acórdão' || item.tipo_documento === 'Decisão Monocrática' || item.tipo_documento === 'Decisão de Julgamento Parcial de Mérito' || item.tipo_documento === 'Decisão Terminativa' || item.tipo_documento === 'Petição Inicial' || item.tipo_documento === 'Termo de Audiência') {
+                    if (item.tipo_documento === 'Sentença' || item.tipo_documento === 'Acórdão' || item.tipo_documento === 'Decisão Monocrática' || item.tipo_documento === 'Decisão de Julgamento Parcial de Mérito' || item.tipo_documento === 'Decisão Terminativa' || item.tipo_documento === 'Petição Inicial' || item.tipo_documento === 'Ata de Audiência') {
                         titleColor = 'text-green-400';
                     } else if (item.tipo_documento === 'Decisão Interlocutória' || item.tipo_documento === 'Petição de Desarquivamento') {
                         titleColor = 'text-purple-400';
@@ -515,10 +515,10 @@
 
                     Utilize os seguintes critérios:
 
-                    * **tipo_documento:** Identifique o tipo de documento. As opções são: 'Petição Inicial', 'Sentença', 'Decisão de Julgamento Parcial de Mérito', 'Decisão Terminativa', 'Acórdão', 'Decisão Monocrática', 'Decisão Interlocutória', 'Despacho', 'Termo de Audiência', 'Certidão', 'Petição de Desarquivamento' ou 'Documento não identificado'.
+                    * **tipo_documento:** Identifique o tipo de documento. As opções são: 'Petição Inicial', 'Sentença', 'Decisão de Julgamento Parcial de Mérito', 'Decisão Terminativa', 'Acórdão', 'Decisão Monocrática', 'Decisão Interlocutória', 'Despacho', 'Ata de Audiência', 'Certidão', 'Petição de Desarquivamento' ou 'Documento não identificado'.
 
                     * **classificacao:** Classifique o documento para fins de arquivamento. As opções são:
-                        - 'Guarda Permanente': Para documentos de grande relevância, como petições iniciais, sentenças, decisões de julgamento parcial de mérito, decisões terminativas, acórdãos, decisões monocráticas e termos de audiência.
+                        - 'Guarda Permanente': Para documentos de grande relevância, como petições iniciais, sentenças, decisões de julgamento parcial de mérito, decisões terminativas, acórdãos, decisões monocráticas e atas de audiência.
                         - 'Eliminação': Para documentos de pouca relevância que não sejam os elencados acima, como despachos.
                         - 'Avaliação Manual': Para documentos que requerem uma análise mais aprofundada, como petições ou outros tipos de documentos não identificados previamente.
                         Essa classificação deve ser inferida a partir do 'tipo_documento'.
@@ -557,7 +557,7 @@
                 };
                 
                 const apiKey = "";
-                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                const apiUrl = ``;
 
                 let attempt = 0;
                 const maxAttempts = 5;
@@ -917,3 +917,4 @@
     </script>
 </body>
 </html>
+
