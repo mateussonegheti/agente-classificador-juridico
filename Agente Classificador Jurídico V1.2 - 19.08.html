@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agente Classificador Jurídico</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Adiciona a biblioteca PDF.js para processar arquivos PDF no navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- Adiciona a biblioteca PapaParse para processar arquivos CSV no navegador -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <!-- Adiciona a biblioteca Tesseract.js para realizar OCR em PDFs -->
+    <script src='https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js'></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .animate-spin {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .prompt-box {
+            @apply p-4 rounded-lg shadow-inner border border-slate-600 transition-colors duration-200 cursor-pointer;
+        }
+        .prompt-box.selected {
+            @apply bg-blue-700 border-blue-500 ring-2 ring-blue-500;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white p-4">
+
+    <div id="app-container" class="min-h-screen bg-slate-900 text-white flex items-center justify-center p-4 sm:p-6 lg:p-8 font-inter">
+        <div class="w-full max-w-2xl bg-slate-800 rounded-2xl shadow-xl p-6 sm:p-8 lg:p-10">
+            <h1 class="text-3xl sm:text-4xl lg:text-5xl font-bold text-center mb-2 text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">
+                Agente Classificador Jurídico
+            </h1>
+            <p class="text-center text-slate-400 mb-8 text-sm sm:text-base">
+                Simulação de um agente de IA especializado. Cole um documento judicial ou faça o upload de arquivos (PDFs ou CSVs) para processamento em lote.
+            </p>
+
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-slate-600 mb-6">
+                <button id="processTab" class="px-4 py-2 text-sm font-medium rounded-t-lg focus:outline-none transition-colors duration-200 text-blue-400 border-b-2 border-blue-400">
+                    Processamento
+                </button>
+                <button id="promptTab" class="px-4 py-2 text-sm font-medium rounded-t-lg focus:outline-none transition-colors duration-200 text-slate-400 hover:text-slate-200">
+                    Visualizar Prompt
+                </button>
+            </div>
+
+            <!-- Tab Content: Processamento -->
+            <div id="processContent" class="space-y-6">
+                <div class="mb-6">
+                    <label for="documento-input" class="block text-slate-300 text-sm font-medium mb-2">
+                        Cole o documento judicial aqui:
+                    </label>
+                    <textarea
+                        id="documento-input"
+                        class="w-full h-40 p-4 bg-slate-700 rounded-lg border border-slate-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors duration-200 resize-none text-sm placeholder-slate-500"
+                        placeholder="Exemplo: 'Julgo procedente...', 'Defiro a produção de prova pericial...' ou 'Intime-se as partes...'"
+                    ></textarea>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="file-input" class="block text-slate-300 text-sm font-medium mb-2">
+                        Ou selecione um ou mais arquivos (PDFs ou CSVs) para processamento em lote:
+                    </label>
+                    <input
+                        type="file"
+                        id="file-input"
+                        accept=".pdf,.csv"
+                        multiple
+                        class="block w-full text-sm text-slate-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-blue-50 file:text-blue-700
+                        hover:file:bg-blue-100 cursor-pointer"
+                    >
+                </div>
+                
+                <button
+                    id="classify-button"
+                    class="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:from-blue-600 hover:to-cyan-600 transition-all duration-300 flex items-center justify-center"
+                >
+                    Classificar Documentos
+                </button>
+
+                <div class="mt-6 border-t border-slate-600 pt-6">
+                    <label for="feedback-input" class="block text-slate-300 text-sm font-medium mb-2">
+                        Importar Feedback Corrigido (CSV) para aprimorar o agente:
+                    </label>
+                    <div class="flex flex-col sm:flex-row items-center space-y-2 sm:space-y-0 sm:space-x-4">
+                        <input
+                            type="file"
+                            id="feedback-input"
+                            accept=".csv"
+                            class="block w-full text-sm text-slate-500
+                            file:mr-4 file:py-2 file:px-4
+                            file:rounded-full file:border-0
+                            file:text-sm file:font-semibold
+                            file:bg-purple-50 file:text-purple-700
+                            hover:file:bg-purple-100 cursor-pointer"
+                        >
+                        <button
+                            id="generate-feedback-prompts-button"
+                            class="w-full sm:w-auto bg-purple-600 text-white font-bold py-2 px-4 rounded-lg shadow-lg hover:bg-purple-700 transition-all duration-300"
+                        >
+                            Gerar Prompts de Feedback
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Visualizar Prompt -->
+            <div id="promptContent" class="space-y-6 hidden">
+                <h2 class="text-xl sm:text-2xl font-bold text-center text-slate-200">
+                    Prompts de Treinamento
+                </h2>
+                <p class="text-center text-slate-400 text-sm sm:text-base">
+                    Selecione os prompts que deseja usar para treinar o modelo e clique em 'Aplicar Treinamento'.
+                </p>
+                
+                <!-- Container para os prompts interativos de feedback -->
+                <div id="interactivePromptsContainer" class="space-y-4">
+                    <p class="text-center text-slate-400 p-4">
+                        Os prompts de treinamento aparecerão aqui após o processamento do seu arquivo de feedback.
+                    </p>
+                </div>
+
+                <button
+                    id="apply-button"
+                    class="w-full bg-gradient-to-r from-green-500 to-lime-500 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:from-green-600 hover:to-lime-600 transition-all duration-300 flex items-center justify-center hidden"
+                >
+                    Aplicar Treinamento
+                </button>
+            </div>
+
+            <!-- Div para a barra de progresso -->
+            <div id="progress-container" class="mt-6 hidden">
+                <div class="text-sm font-medium text-slate-400 mb-2">
+                    <span id="progress-text"></span>
+                </div>
+                <div class="w-full bg-slate-700 rounded-full h-2.5">
+                    <div id="progress-bar" class="bg-blue-500 h-2.5 rounded-full transition-all duration-300 ease-in-out" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div id="output-container" class="mt-6"></div>
+            
+            <button
+                id="download-button"
+                class="w-full bg-slate-600 text-white font-bold py-3 px-4 rounded-lg shadow-lg hover:bg-slate-700 transition-all duration-300 mt-4 hidden"
+            >
+                Download Resultados (CSV)
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Define o caminho para o worker de PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        
+        document.addEventListener('DOMContentLoaded', async () => {
+            const documentoInput = document.getElementById('documento-input');
+            const fileInput = document.getElementById('file-input');
+            const feedbackInput = document.getElementById('feedback-input');
+            const classifyButton = document.getElementById('classify-button');
+            const downloadButton = document.getElementById('download-button');
+            const generateFeedbackPromptsButton = document.getElementById('generate-feedback-prompts-button');
+            const outputContainer = document.getElementById('output-container');
+            const progressContainer = document.getElementById('progress-container');
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const interactivePromptsContainer = document.getElementById('interactivePromptsContainer');
+            const applyButton = document.getElementById('apply-button');
+            const processTab = document.getElementById('processTab');
+            const promptTab = document = document.getElementById('promptTab');
+            const processContent = document.getElementById('processContent');
+            const promptContent = document.getElementById('promptContent');
+            const PROXY_URL = 'https://cors-anywhere.herokuapp.com/';
+
+            let batchResults = [];
+            let ocrWorker = null;
+            let isOcrReady = false;
+            let ocrProgressDiv = null;
+            let userExamples = []; // Array para armazenar exemplos de feedback do usuário
+            let docsToClassify = [];
+            
+            // --- UI Functions ---
+            const showTab = (tabId) => {
+                // Remove active styles from all tabs and hide all content
+                processTab.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                processTab.classList.add('text-slate-400', 'hover:text-slate-200');
+                promptTab.classList.remove('text-blue-400', 'border-b-2', 'border-blue-400');
+                promptTab.classList.add('text-slate-400', 'hover:text-slate-200');
+                processContent.classList.add('hidden');
+                promptContent.classList.add('hidden');
+                
+                // Add active styles to the selected tab and show its content
+                if (tabId === 'process') {
+                    processTab.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+                    processTab.classList.remove('text-slate-400', 'hover:text-slate-200');
+                    processContent.classList.remove('hidden');
+                } else if (tabId === 'prompt') {
+                    promptTab.classList.add('text-blue-400', 'border-b-2', 'border-blue-400');
+                    promptTab.classList.remove('text-slate-400', 'hover:text-slate-200');
+                    promptContent.classList.remove('hidden');
+                }
+            };
+            
+            const updateProgressBar = (progress, message) => {
+                const percentage = Math.floor(progress * 100);
+                progressBar.style.width = `${percentage}%`;
+                progressText.textContent = message;
+            };
+
+            const addLogMessage = (message, type = 'info', bold = false) => {
+                const messageDiv = document.createElement('div');
+                let bgColor, borderColor, textColor;
+                if (type === 'error') {
+                    bgColor = 'bg-red-800';
+                    borderColor = 'border-red-700';
+                    textColor = 'text-red-300';
+                } else if (type === 'success') {
+                    bgColor = 'bg-green-800';
+                    borderColor = 'border-green-700';
+                    textColor = 'text-green-300';
+                } else if (type === 'info') {
+                    bgColor = 'bg-blue-800';
+                    borderColor = 'border-blue-700';
+                    textColor = 'text-blue-300';
+                } else if (type === 'progress') {
+                     bgColor = 'bg-slate-700';
+                     borderColor = 'border-slate-600';
+                     textColor = 'text-slate-400';
+                }
+                messageDiv.className = `p-2 mt-2 text-sm ${bgColor} bg-opacity-30 border ${borderColor} ${textColor} rounded-lg`;
+                messageDiv.innerHTML = bold ? `<strong>${message}</strong>` : message;
+                outputContainer.appendChild(messageDiv);
+                outputContainer.scrollTop = outputContainer.scrollHeight;
+            };
+
+            const clearOutput = () => {
+                outputContainer.innerHTML = '';
+            };
+            
+            const showBatchResults = (results) => {
+                progressContainer.classList.add('hidden');
+                
+                if (results.length === 0) {
+                    addLogMessage("Nenhum resultado de classificação obtido.", 'error');
+                    return;
+                }
+                
+                const maxDisplayCount = 3;
+                const resultsToDisplay = results.slice(0, maxDisplayCount);
+                const hasMoreResults = results.length > maxDisplayCount;
+
+                const resultsHtml = resultsToDisplay.map((item, index) => {
+                    let titleColor;
+                    if (item.tipo_documento === 'Sentença' || item.tipo_documento === 'Acórdão' || item.tipo_documento === 'Decisão Monocrática' || item.tipo_documento === 'Decisão de Julgamento Parcial de Mérito' || item.tipo_documento === 'Decisão Terminativa' || item.tipo_documento === 'Petição Inicial' || item.tipo_documento === 'Termo de Audiência') {
+                        titleColor = 'text-green-400';
+                    } else if (item.tipo_documento === 'Decisão Interlocutória' || item.tipo_documento === 'Petição de Desarquivamento') {
+                        titleColor = 'text-purple-400';
+                    } else if (item.tipo_documento === 'Despacho') {
+                        titleColor = 'text-yellow-400';
+                    } else if (item.tipo_documento === 'Erro' || item.classificacao === 'Avaliação Manual') {
+                        titleColor = 'text-red-400';
+                    } else {
+                        titleColor = 'text-slate-400';
+                    }
+                    
+                    const fileNameDisplay = item.nome_do_documento && item.nome_do_documento.startsWith('http')
+                        ? `<a href="${item.nome_do_documento}" target="_blank" class="text-blue-300 hover:underline">${item.nome_do_documento.substring(item.nome_do_documento.lastIndexOf('/') + 1)}</a>`
+                        : item.nome_do_documento;
+
+                    return `
+                        <div class="p-4 bg-slate-700 rounded-lg shadow-inner border border-slate-600 mb-4">
+                            <h3 class="text-lg font-bold text-slate-200">
+                                Documento ${index + 1}: <span class="font-extrabold ${titleColor}">${item.tipo_documento}</span>
+                            </h3>
+                            <p class="text-slate-400 text-sm mt-1">
+                                **Nome:** ${fileNameDisplay || 'N/A'}
+                            </p>
+                            <p class="text-slate-400 text-sm mt-1">
+                                **Classificação:** ${item.classificacao}
+                            </p>
+                            <p class="text-slate-400 text-sm mt-1">
+                                **Motivo:** ${item.motivo}
+                            </p>
+                            <p class="text-slate-400 text-sm mt-1">
+                                **Palavra-chave:** ${item.palavra_chave_encontrada || 'N/A'}
+                            </p>
+                        </div>
+                    `;
+                }).join('');
+
+                const batchResultDiv = document.createElement('div');
+                batchResultDiv.className = "mt-6";
+                batchResultDiv.innerHTML = `
+                    <h2 class="text-xl font-bold text-slate-200 mb-4">
+                        Resultados da Classificação em Lote:
+                    </h2>
+                    ${resultsHtml}
+                `;
+                
+                if (hasMoreResults) {
+                     const moreResultsMessage = document.createElement('p');
+                     moreResultsMessage.className = "text-center text-slate-400 text-sm mt-2 mb-4";
+                     moreResultsMessage.textContent = `Mostrando os ${maxDisplayCount} primeiros resultados de um total de ${results.length}. Baixe o arquivo para ver todos.`;
+                     batchResultDiv.appendChild(moreResultsMessage);
+                }
+                
+                outputContainer.innerHTML = '';
+                outputContainer.appendChild(batchResultDiv);
+                if (results.length > 0) {
+                     downloadButton.classList.remove('hidden');
+                } else {
+                     downloadButton.classList.add('hidden');
+                }
+            };
+
+            const downloadResultsCsv = () => {
+                // Nova ordem das colunas
+                const header = ["nome do documento", "Classificação", "tipo de documento", "palavra-chave encontrada", "motivo", "Feedback_Status", "inteiro teor"];
+                const data = batchResults.map(item => [
+                    item.nome_do_documento || 'Documento',
+                    item.classificacao,
+                    item.tipo_documento,
+                    item.palavra_chave_encontrada,
+                    item.motivo,
+                    '', // Adiciona a coluna Feedback_Status vazia
+                    item.inteiro_teor.replace(/"/g, '""').replace(/\n/g, ' ')
+                ]);
+
+                const csv = [
+                    header.join(','),
+                    ...data.map(row => row.map(cell => `"${cell}"`).join(','))
+                ].join('\n');
+
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement('a');
+                if (link.download !== undefined) {
+                    const url = URL.createObjectURL(blob);
+                    link.setAttribute('href', url);
+                    link.setAttribute('download', 'resultados_classificacao.csv');
+                    link.style.visibility = 'hidden';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+            };
+            
+            // Inicializa um único worker para OCR
+            const initializeOcrWorker = async () => {
+                return new Promise(async (resolve, reject) => {
+                    clearOutput();
+                    ocrProgressDiv = document.createElement('div');
+                    ocrProgressDiv.className = "p-2 mt-2 text-sm bg-blue-800 bg-opacity-30 border border-blue-700 text-blue-300 rounded-lg flex items-center justify-center space-x-2";
+                    ocrProgressDiv.innerHTML = `
+                        <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Configurando o motor de OCR, por favor aguarde...</span>
+                    `;
+                    outputContainer.appendChild(ocrProgressDiv);
+
+                    try {
+                        ocrWorker = await Tesseract.createWorker({
+                            logger: m => {
+                                if (ocrProgressDiv && m.progress) {
+                                    ocrProgressDiv.innerHTML = `
+                                        <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        <span>Configurando OCR... ${parseInt(m.progress * 100)}%</span>
+                                    `;
+                                }
+                            }
+                        });
+                        
+                        await ocrWorker.load();
+                        await ocrWorker.loadLanguage('por');
+                        await ocrWorker.initialize('por');
+                        isOcrReady = true;
+
+                        if (ocrProgressDiv) {
+                            ocrProgressDiv.classList.remove('bg-blue-800', 'border-blue-700', 'text-blue-300');
+                            ocrProgressDiv.classList.add('bg-green-800', 'border-green-700', 'text-green-300');
+                            ocrProgressDiv.innerHTML = `
+                                <strong>1 motor de OCR pronto para uso.</strong>
+                            `;
+                        }
+                        resolve();
+                    } catch (err) {
+                        isOcrReady = false;
+                        if (ocrProgressDiv) {
+                            ocrProgressDiv.classList.remove('bg-blue-800', 'border-blue-700', 'text-blue-300');
+                            ocrProgressDiv.classList.add('bg-red-800', 'border-red-700', 'text-red-300');
+                            ocrProgressDiv.innerHTML = `<strong>Falha ao carregar o motor de OCR: ${err.message}</strong>`;
+                        }
+                        reject(err);
+                    }
+                });
+            };
+
+            // Função para extração de texto com OCR
+            const extractTextFromPdfWithOcr = async (fileBuffer) => {
+                if (!isOcrReady) {
+                    throw new Error('O motor de OCR não está pronto. Tente novamente mais tarde.');
+                }
+                
+                const typedarray = new Uint8Array(fileBuffer);
+                const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                let ocrText = '';
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.5 });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+                    
+                    const { data: { text } } = await ocrWorker.recognize(canvas);
+                    ocrText += text;
+                    canvas.remove();
+                }
+                
+                return ocrText.trim();
+            };
+
+            // Função original de extração de texto, agora adaptada para um único worker
+            const extractTextFromPdf = async (fileBuffer, useOcr = false) => {
+                if (useOcr) {
+                    return extractTextFromPdfWithOcr(fileBuffer);
+                }
+                
+                let fullText = '';
+                const typedarray = new Uint8Array(fileBuffer);
+                const pdf = await pdfjsLib.getDocument({ data: typedarray }).promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    fullText += textContent.items.map(item => item.str).join(' ');
+                }
+                
+                return fullText.trim();
+            };
+
+            // Gera a string de exemplos a partir da lista de exemplos padrão e do usuário
+            const generateExamplesPrompt = () => {
+                const standardExamples = `
+                    **Exemplo 1 (Sentença):**
+                    Documento: 'Diante do exposto, e em conformidade com o artigo 487 do CPC, julgo procedente o pedido para condenar o réu...'
+                    JSON de Resposta:
+                    {
+                        "nome_do_documento": "nome-exemplo.pdf",
+                        "tipo_documento": "Sentença",
+                        "classificacao": "Guarda Permanente",
+                        "palavra_chave_encontrada": "julgo procedente",
+                        "motivo": "O documento decide a questão principal ('julgo procedente') e encerra o mérito do processo.",
+                        "inteiro_teor": "..."
+                    }
+
+                    **Exemplo 2 (Despacho):**
+                    Documento: 'Recebo a petição de fls. 120-125 e determino que se intime a parte autora...'
+                    JSON de Resposta:
+                    {
+                        "nome_do_documento": "nome-exemplo.pdf",
+                        "tipo_documento": "Despacho",
+                        "classificacao": "Eliminação",
+                        "palavra_chave_encontrada": "intime a parte autora",
+                        "motivo": "O documento trata de uma movimentação administrativa ('intime a parte autora') para dar prosseguimento ao processo.",
+                        "inteiro_teor": "..."
+                    }
+                `;
+
+                const userExamplesString = userExamples.length > 0
+                    ? userExamples.map((ex, index) => `
+                    **Exemplo Personalizado ${index + 1}:**
+                    Documento: '${ex.inteiro_teor.replace(/'/g, "\\'")}'
+                    JSON de Resposta:
+                    {
+                        "nome_do_documento": "${ex.nome_do_documento.replace(/"/g, '""')}",
+                        "tipo_documento": "${ex.tipo_documento}",
+                        "classificacao": "${ex.classificacao}",
+                        "palavra_chave_encontrada": "${ex.palavra_chave_encontrada.replace(/"/g, '""')}",
+                        "motivo": "${ex.motivo.replace(/"/g, '""')}",
+                        "inteiro_teor": "..."
+                    }`).join('')
+                    : '';
+
+                return `${standardExamples}${userExamplesString}`;
+            };
+
+            const createClassificationPrompt = (documentContent, documentName) => {
+                const examplesPrompt = generateExamplesPrompt();
+
+                return `
+                    Você é um assistente especializado em análise de documentos jurídicos. Sua principal tarefa é classificar um documento judicial e fornecer informações detalhadas em formato JSON.
+
+                    Utilize os seguintes critérios:
+
+                    * **tipo_documento:** Identifique o tipo de documento. As opções são: 'Petição Inicial', 'Sentença', 'Decisão de Julgamento Parcial de Mérito', 'Decisão Terminativa', 'Acórdão', 'Decisão Monocrática', 'Decisão Interlocutória', 'Despacho', 'Termo de Audiência', 'Certidão', 'Petição de Desarquivamento' ou 'Documento não identificado'.
+
+                    * **classificacao:** Classifique o documento para fins de arquivamento. As opções são:
+                        - 'Guarda Permanente': Para documentos de grande relevância, como petições iniciais, sentenças, decisões de julgamento parcial de mérito, decisões terminativas, acórdãos, decisões monocráticas e termos de audiência.
+                        - 'Eliminação': Para documentos de pouca relevância que não sejam os elencados acima, como despachos.
+                        - 'Avaliação Manual': Para documentos que requerem uma análise mais aprofundada, como petições ou outros tipos de documentos não identificados previamente.
+                        Essa classificação deve ser inferida a partir do 'tipo_documento'.
+
+                    * **palavra_chave_encontrada:** Identifique uma palavra ou frase-chave que seja um forte indicador do tipo de documento. Se não encontrar, retorne 'N/A'.
+
+                    * **motivo:** Forneça uma breve justificativa de 1 a 2 frases para a classificação.
+
+                    Aqui estão alguns exemplos para você entender a lógica:
+                    ${examplesPrompt}
+
+                    Agora, classifique o seguinte documento e forneça uma resposta JSON completa.
+                    O documento para análise é:
+                    '${documentContent}'
+                    O nome do documento é: '${documentName}'
+                `;
+            };
+            
+            const classifyDocument = async (prompt, documentContent, documentName) => {
+                const payload = {
+                    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        responseMimeType: 'application/json',
+                        responseSchema: {
+                            type: 'OBJECT',
+                            properties: {
+                                nome_do_documento: { type: 'STRING' },
+                                tipo_documento: { type: 'STRING' },
+                                classificacao: { type: 'STRING' },
+                                palavra_chave_encontrada: { type: 'STRING' },
+                                motivo: { type: 'STRING' },
+                                inteiro_teor: { type: 'STRING' },
+                            },
+                        },
+                    },
+                };
+                
+                const apiKey = "";
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                let attempt = 0;
+                const maxAttempts = 5;
+                while (attempt < maxAttempts) {
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload),
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            if (response.status === 429) {
+                                attempt++;
+                                const delay = Math.pow(2, attempt) * 1000;
+                                console.warn(`API rate limit exceeded. Retrying in ${delay / 1000} seconds...`);
+                                await new Promise(res => setTimeout(res, delay));
+                                continue;
+                            }
+                            throw new Error(errorData.error.message || `API request failed with status: ${response.status}`);
+                        }
+                        
+                        const result = await response.json();
+
+                        if (result && result.candidates && result.candidates.length > 0) {
+                            const jsonText = result.candidates[0].content.parts[0].text;
+                            const parsedResult = JSON.parse(jsonText);
+                            parsedResult.inteiro_teor = documentContent;
+                            parsedResult.nome_do_documento = documentName;
+                            return parsedResult;
+                        } else {
+                            throw new Error("Não foi possível obter um resultado da API.");
+                        }
+                    } catch (err) {
+                        if (attempt >= maxAttempts - 1) {
+                            throw err;
+                        }
+                        attempt++;
+                        const delay = Math.pow(2, attempt) * 1000;
+                        console.warn(`Attempt ${attempt} failed. Retrying in ${delay / 1000} seconds...`);
+                        await new Promise(res => setTimeout(res, delay));
+                    }
+                }
+                throw new Error("Falha ao se conectar com a API após várias tentativas.");
+            };
+            
+            const ocrReadyPromise = initializeOcrWorker();
+
+            // Renderiza os prompts de feedback interativos
+            const renderInteractivePrompts = (prompts) => {
+                interactivePromptsContainer.innerHTML = ''; // Limpa o container
+                prompts.forEach((promptData, index) => {
+                    const promptBox = document.createElement('div');
+                    promptBox.className = 'prompt-box text-sm text-slate-300';
+                    promptBox.dataset.index = index;
+                    promptBox.dataset.prompt = JSON.stringify(promptData);
+                    
+                    const promptText = `
+                        **Nome do Documento:** ${promptData['nome do documento'] || 'N/A'}
+                        **Tipo:** ${promptData['tipo de documento'] || 'N/A'}
+                        **Classificação:** ${promptData.Classificação || 'N/A'}
+                        **Palavra-chave:** ${promptData['palavra-chave encontrada'] || 'N/A'}
+                        **Motivo:** ${promptData.motivo || 'N/A'}
+                        **Inteiro Teor:**
+                        ------------------
+                        ${promptData['inteiro teor'] || 'N/A'}
+                        ------------------
+                    `;
+
+                    promptBox.innerHTML = `
+                        <div class="flex items-center space-x-2">
+                            <input type="checkbox" class="prompt-checkbox form-checkbox h-4 w-4 text-blue-500 rounded-lg bg-slate-700 border-slate-600 focus:ring-blue-500 transition-colors duration-200 cursor-pointer">
+                            <span class="font-bold text-slate-200">Prompt de Feedback #${index + 1}</span>
+                        </div>
+                        <pre class="mt-4 whitespace-pre-wrap text-xs text-slate-400 max-h-60 overflow-y-auto p-2 bg-slate-800 rounded-lg">${promptText}</pre>
+                    `;
+                    interactivePromptsContainer.appendChild(promptBox);
+
+                    const checkbox = promptBox.querySelector('.prompt-checkbox');
+                    promptBox.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (e.target !== checkbox) {
+                            checkbox.checked = !checkbox.checked;
+                        }
+                        if (checkbox.checked) {
+                            promptBox.classList.add('selected');
+                        } else {
+                            promptBox.classList.remove('selected');
+                        }
+                        // Show/hide apply button
+                        const selectedCount = document.querySelectorAll('.prompt-box.selected').length;
+                        if (selectedCount > 0) {
+                            applyButton.classList.remove('hidden');
+                        } else {
+                            applyButton.classList.add('hidden');
+                        }
+                    });
+
+                    checkbox.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        if (checkbox.checked) {
+                            promptBox.classList.add('selected');
+                        } else {
+                            promptBox.classList.remove('selected');
+                        }
+                        // Show/hide apply button
+                        const selectedCount = document.querySelectorAll('.prompt-box.selected').length;
+                        if (selectedCount > 0) {
+                            applyButton.classList.remove('hidden');
+                        } else {
+                            applyButton.classList.add('hidden');
+                        }
+                    });
+                });
+            };
+
+            // Listener para gerar prompts de feedback
+            generateFeedbackPromptsButton.addEventListener('click', () => {
+                const file = feedbackInput.files[0];
+                if (!file) {
+                    addLogMessage("Por favor, selecione um arquivo CSV de feedback.", 'error');
+                    return;
+                }
+                
+                applyButton.classList.add('hidden');
+                interactivePromptsContainer.innerHTML = `<p class="text-center text-slate-400 p-4">Processando arquivo...</p>`;
+
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        let feedbackPrompts = [];
+                        
+                        const requiredFields = ['inteiro teor', 'tipo de documento', 'Classificação', 'palavra-chave encontrada', 'motivo', 'Feedback_Status'];
+                        const missingFields = requiredFields.filter(field => !results.meta.fields.includes(field));
+                        
+                        if (missingFields.length > 0) {
+                            addLogMessage(`O arquivo CSV está faltando as seguintes colunas: ${missingFields.join(', ')}.`, 'error', true);
+                            interactivePromptsContainer.innerHTML = '';
+                            return;
+                        }
+
+                        results.data.forEach(row => {
+                            if (row.Feedback_Status && row.Feedback_Status.trim().toLowerCase() === 'corrigido') {
+                                feedbackPrompts.push(row);
+                            }
+                        });
+
+                        if (feedbackPrompts.length > 0) {
+                            renderInteractivePrompts(feedbackPrompts);
+                            addLogMessage(`Foram encontrados ${feedbackPrompts.length} prompts de feedback corrigidos. Selecione para aplicar o treinamento.`, 'success', true);
+                            showTab('prompt');
+                        } else {
+                            addLogMessage("Nenhum prompt corrigido foi encontrado no CSV de feedback. Nenhum treinamento a ser aplicado.", 'info', true);
+                            interactivePromptsContainer.innerHTML = `<p class="text-center text-slate-400 p-4">Nenhum prompt corrigido foi encontrado no seu CSV.</p>`;
+                        }
+                    },
+                    error: (err) => {
+                        addLogMessage(`Erro ao processar o arquivo de feedback: ${err.message}`, 'error', true);
+                    }
+                });
+            });
+
+
+            // Handle the generation of the general prompt
+            classifyButton.addEventListener('click', async () => {
+                const documento = documentoInput.value;
+                const files = fileInput.files;
+                docsToClassify = [];
+                clearOutput();
+                downloadButton.classList.add('hidden');
+                
+                if (!documento.trim() && files.length === 0) {
+                    addLogMessage("Por favor, cole um texto ou selecione um ou mais arquivos para classificação.", 'error', true);
+                    return;
+                }
+                
+                await ocrReadyPromise;
+                
+                if (ocrProgressDiv) {
+                    ocrProgressDiv.remove();
+                    ocrProgressDiv = null;
+                }
+
+                const totalFiles = files.length + (documento.trim() ? 1 : 0);
+                let processedCount = 0;
+                
+                progressContainer.classList.remove('hidden');
+
+                const updateProgress = (message) => {
+                    const percentage = (processedCount / totalFiles);
+                    progressBar.style.width = `${percentage * 100}%`;
+                    progressText.textContent = `Processando documento ${processedCount + 1}/${totalFiles}: ${message}`;
+                };
+
+                const processFileForClassification = async (file, fileName) => {
+                    if (file.type === 'application/pdf') {
+                        addLogMessage(`Extraindo texto nativo do PDF: ${fileName}`, 'progress');
+                        const fileBuffer = await file.arrayBuffer();
+                        let docContent = await extractTextFromPdf(fileBuffer);
+
+                        if (!docContent.trim()) {
+                            addLogMessage(`Nenhum texto nativo encontrado. Tentando OCR para ${fileName}...`, 'progress');
+                            docContent = await extractTextFromPdf(fileBuffer, true);
+                        }
+
+                        if (docContent.trim()) {
+                            docsToClassify.push({ content: docContent, name: fileName });
+                        } else {
+                            addLogMessage(`Não foi possível extrair texto do arquivo PDF: ${fileName}`, 'error');
+                        }
+                    } else if (file.type === 'text/csv') {
+                        addLogMessage(`Processando arquivo CSV: ${fileName}`, 'progress');
+                        const csvContent = await file.text();
+                        const results = Papa.parse(csvContent, { header: true, skipEmptyLines: true });
+                        const linkColumn = results.meta.fields.find(field => field.toUpperCase() === 'LINK DE ACESSO AO DOCUMENTO');
+                        
+                        if (!linkColumn) {
+                            addLogMessage(`O arquivo CSV '${fileName}' não contém a coluna 'LINK DE ACESSO AO DOCUMENTO'.`, 'error', true);
+                            return;
+                        }
+                        
+                        for (const row of results.data) {
+                            const url = row[linkColumn];
+                            if (url) {
+                                try {
+                                    addLogMessage(`Baixando e processando link: ${url}`, 'progress');
+                                    const response = await fetch(PROXY_URL + url, { credentials: 'include' });
+                                    
+                                    if (!response.ok) {
+                                        throw new Error(`Falha no download. Status: ${response.status}. Motivo: O navegador não consegue autenticar-se.`);
+                                    }
+
+                                    const fileBuffer = await response.arrayBuffer();
+                                    const urlFileName = url.substring(url.lastIndexOf('/') + 1) || 'documento-online.pdf';
+                                    
+                                    let docContent = await extractTextFromPdf(fileBuffer);
+                                    if (!docContent) {
+                                        addLogMessage(`Arquivo do link '${url}' não tem texto nativo. Iniciando OCR...`, 'progress');
+                                        docContent = await extractTextFromPdf(fileBuffer, true);
+                                    }
+
+                                    if (docContent.trim()) {
+                                        docsToClassify.push({ content: docContent, name: urlFileName });
+                                    } else {
+                                        addLogMessage(`Não foi possível extrair texto do PDF online: ${urlFileName}`, 'error');
+                                    }
+                                } catch (err) {
+                                    batchResults.push({
+                                        nome_do_documento: fileName,
+                                        tipo_documento: 'Erro',
+                                        classificacao: 'Avaliação Manual',
+                                        palavra_chave_encontrada: 'N/A',
+                                        motivo: `Erro ao baixar ou processar o documento: ${err.message}`,
+                                        inteiro_teor: ''
+                                    });
+                                }
+                            }
+                        }
+                    }
+                };
+
+                // Populate docsToClassify
+                if (documento.trim()) {
+                    docsToClassify.push({ content: documento, name: 'Texto Manual' });
+                }
+                
+                if (files.length > 0) {
+                    for (const file of files) {
+                        await processFileForClassification(file, file.name);
+                    }
+                }
+                
+                if (docsToClassify.length === 0) {
+                    addLogMessage("Nenhum documento para classificar. Por favor, cole texto ou selecione arquivos.", "error", true);
+                    progressContainer.classList.add('hidden');
+                    return;
+                }
+
+                // Run classification on all documents
+                batchResults = [];
+                for (let i = 0; i < docsToClassify.length; i++) {
+                    const doc = docsToClassify[i];
+                    updateProgressBar(i / docsToClassify.length, `Classificando: ${doc.name}`);
+                    try {
+                        const classificationPrompt = createClassificationPrompt(doc.content, doc.name);
+                        const result = await classifyDocument(classificationPrompt, doc.content, doc.name);
+                        batchResults.push(result);
+                    } catch (err) {
+                        batchResults.push({
+                            nome_do_documento: doc.name,
+                            tipo_documento: 'Erro',
+                            classificacao: 'Avaliação Manual',
+                            palavra_chave_encontrada: 'N/A',
+                            motivo: `Erro na classificação: ${err.message}`,
+                            inteiro_teor: doc.content
+                        });
+                    }
+                }
+
+                updateProgressBar(1, 'Processamento concluído. Exibindo resultados...');
+                setTimeout(() => {
+                    showBatchResults(batchResults);
+                    progressContainer.classList.add('hidden');
+                }, 1000);
+            });
+
+            // Handle the classification from the prompt tab
+            applyButton.addEventListener('click', async () => {
+                const selectedBoxes = document.querySelectorAll('.prompt-box.selected');
+                if (selectedBoxes.length === 0) {
+                    addLogMessage('Por favor, selecione pelo menos um prompt de feedback para aplicar.', 'error', true);
+                    return;
+                }
+                
+                const selectedFeedback = Array.from(selectedBoxes).map(box => JSON.parse(box.dataset.prompt));
+                
+                selectedFeedback.forEach(item => {
+                    userExamples.push({
+                        nome_do_documento: item['nome do documento'],
+                        tipo_documento: item['tipo de documento'],
+                        classificacao: item.Classificação,
+                        palavra_chave_encontrada: item['palavra-chave encontrada'],
+                        motivo: item.motivo,
+                        inteiro_teor: item['inteiro teor']
+                    });
+                });
+                
+                addLogMessage(`O agente de IA aprendeu com ${selectedFeedback.length} novos exemplos. Agora ele está mais inteligente!`, 'success', true);
+                
+                // Clear selected state and hide button
+                selectedBoxes.forEach(box => box.classList.remove('selected'));
+                applyButton.classList.add('hidden');
+            });
+
+            processTab.addEventListener('click', () => {
+                showTab('process');
+                if (batchResults.length > 0) {
+                    outputContainer.classList.remove('hidden');
+                    downloadButton.classList.remove('hidden');
+                } else {
+                    outputContainer.classList.add('hidden');
+                    downloadButton.classList.add('hidden');
+                }
+            });
+            
+            promptTab.addEventListener('click', () => {
+                showTab('prompt');
+                // Oculta a tabela de resultados e o botão de download na aba Visualizar Prompt
+                outputContainer.classList.add('hidden');
+                downloadButton.classList.add('hidden');
+            });
+            
+            downloadButton.addEventListener('click', downloadResultsCsv);
+        });
+    </script>
+</body>
+</html>
